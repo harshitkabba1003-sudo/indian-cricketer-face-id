@@ -1,6 +1,5 @@
 import os
 import numpy as np
-import cv2
 import face_recognition
 import streamlit as st
 from PIL import Image
@@ -26,12 +25,14 @@ def load_and_encode_dataset():
         for img_name in os.listdir(person_dir):
             img_path = os.path.join(person_dir, img_name)
             try:
-                image = face_recognition.load_image_file(img_path)
-                encodings = face_recognition.face_encodings(image)
+                # Load image via PIL instead of OpenCV
+                pil_img = Image.open(img_path).convert("RGB")
+                img_array = np.array(pil_img)
+                encodings = face_recognition.face_encodings(img_array)
                 if len(encodings) > 0:
                     known_encodings.append(encodings[0])
                     known_names.append(person_name.replace("_", " ").title())
-            except Exception as e:
+            except Exception:
                 continue
                 
     return known_encodings, known_names
@@ -40,18 +41,18 @@ st.sidebar.header("Dataset Status")
 with st.spinner("Loading dataset facial encodings..."):
     known_encodings, known_names = load_and_encode_dataset()
 
-st.sidebar.success(f"Loaded {len(known_encodings)} face samples for {len(set(known_names))} players.")
+st.sidebar.success(f"Loaded {len(known_encodings)} face samples across {len(set(known_names))} players.")
 
 uploaded_file = st.file_uploader("Upload an image of an Indian Cricketer", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
-    file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-    image = cv2.imdecode(file_bytes, 1)
-    rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    # Open uploaded file with PIL
+    pil_image = Image.open(uploaded_file).convert("RGB")
+    rgb_image = np.array(pil_image)
 
     col1, col2 = st.columns(2)
     with col1:
-        st.image(rgb_image, caption="Uploaded Image", use_container_width=True)
+        st.image(pil_image, caption="Uploaded Image", use_container_width=True)
 
     face_locations = face_recognition.face_locations(rgb_image)
     face_encodings = face_recognition.face_encodings(rgb_image, face_locations)
@@ -60,7 +61,7 @@ if uploaded_file is not None:
         if len(face_encodings) == 0:
             st.warning("No facial features detected in the uploaded image.")
         else:
-            for idx, face_encoding in enumerate(face_encodings):
+            for face_encoding in face_encodings:
                 matches = face_recognition.compare_faces(known_encodings, face_encoding, tolerance=0.5)
                 name = "Unknown Person"
 
