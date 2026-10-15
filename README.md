@@ -8,6 +8,7 @@
 An end-to-end Computer Vision and Machine Learning web application designed to automatically detect and identify Indian Cricket Team members from uploaded images using facial feature extraction.
 🏏 Indian Cricket Team Member Face Identification
 An end-to-end Computer Vision and Machine Learning web application designed to automatically detect and identify Indian Cricket Team members from uploaded images using facial feature extraction.
+
 Steamlit link : https://indian-cricketer-face-id-2edr8gd92mfh6j6eztbyaq.streamlit.app/
 
 📸 Dataset & Supported Players
