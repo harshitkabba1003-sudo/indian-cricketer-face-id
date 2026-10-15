@@ -1,46 +1,28 @@
 import os
-import urllib.request
-import cv2
 import numpy as np
 import streamlit as st
 from PIL import Image
+from sklearn.neighbors import KNeighborsClassifier
 
 st.set_page_config(page_title="Indian Cricketer Face ID", layout="wide")
 st.title("🏏 Indian Cricket Team Face Identification App")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATASET_DIR = os.path.join(BASE_DIR, "dataset")
-CASCADE_PATH = os.path.join(BASE_DIR, "haarcascade_frontalface_default.xml")
 
-# Safely download Haar Cascade XML if not present locally
+# Convert image into lightweight feature vector using PIL & Numpy (No OpenCV required)
+def extract_pil_features(pil_img):
+    img_resized = pil_img.resize((64, 64)).convert("L")  # Convert to 64x64 Grayscale
+    img_array = np.array(img_resized, dtype=np.float32) / 255.0
+    return img_array.flatten()
+
 @st.cache_resource
-def load_detector():
-    if not os.path.exists(CASCADE_PATH):
-        url = "https://raw.githubusercontent.com/opencv/opencv/master/data/haarcascades/haarcascade_frontalface_default.xml"
-        urllib.request.urlretrieve(url, CASCADE_PATH)
-    
-    detector = cv2.CascadeClassifier(CASCADE_PATH)
-    if detector.empty():
-        raise RuntimeError("Failed to load CascadeClassifier XML file.")
-    return detector
-
-def extract_face_features(image_np, face_box):
-    x, y, w, h = face_box
-    face_roi = image_np[y:y+h, x:x+w]
-    face_resized = cv2.resize(face_roi, (100, 100))
-    hsv = cv2.cvtColor(face_resized, cv2.COLOR_RGB2HSV)
-    hist = cv2.calcHist([hsv], [0, 1, 2], None, [8, 8, 8], [0, 180, 0, 256, 0, 256])
-    cv2.normalize(hist, hist)
-    return hist.flatten()
-
-@st.cache_data
-def build_lightweight_database():
-    detector = load_detector()
-    db_features = []
-    db_labels = []
+def train_lightweight_model():
+    X_train = []
+    y_train = []
     
     if not os.path.exists(DATASET_DIR):
-        return db_features, db_labels
+        return None, []
 
     for person_name in os.listdir(DATASET_DIR):
         person_dir = os.path.join(DATASET_DIR, person_name)
@@ -50,58 +32,49 @@ def build_lightweight_database():
         for img_name in os.listdir(person_dir):
             img_path = os.path.join(person_dir, img_name)
             try:
-                pil_img = Image.open(img_path).convert("RGB")
-                img_np = np.array(pil_img)
-                gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
-                faces = detector.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4)
-                
-                if len(faces) > 0:
-                    feat = extract_face_features(img_np, faces[0])
-                    db_features.append(feat)
-                    db_labels.append(person_name.replace("_", " ").title())
+                pil_img = Image.open(img_path)
+                feat = extract_pil_features(pil_img)
+                X_train.append(feat)
+                y_train.append(person_name.replace("_", " ").title())
             except Exception:
                 continue
 
-    return np.array(db_features), db_labels
+    if len(X_train) == 0:
+        return None, []
+
+    # Train a fast, low-memory K-Nearest Neighbors Classifier
+    knn = KNeighborsClassifier(n_neighbors=1, metric="cosine")
+    knn.fit(X_train, y_train)
+    return knn, list(set(y_train))
 
 if not os.path.exists(DATASET_DIR):
-    st.error(f"Dataset folder not found at `{DATASET_DIR}`. Please ensure the dataset folder is committed to GitHub.")
+    st.error(f"Dataset folder not found at `{DATASET_DIR}`. Please verify that your `dataset` folder is committed to GitHub.")
 else:
-    with st.spinner("Initializing lightweight face database..."):
-        db_features, db_labels = build_lightweight_database()
+    with st.spinner("Training lightweight model..."):
+        model, classes = train_lightweight_model()
 
-    st.sidebar.success(f"Indexed {len(db_features)} face samples.")
+    if model is None:
+        st.error("No valid image data found in dataset directory.")
+    else:
+        st.sidebar.success(f"Model trained successfully on {len(classes)} players!")
 
-    uploaded_file = st.file_uploader("Upload an image of an Indian Cricketer", type=["jpg", "jpeg", "png"])
+        uploaded_file = st.file_uploader("Upload an image of an Indian Cricketer", type=["jpg", "jpeg", "png"])
 
-    if uploaded_file is not None:
-        pil_image = Image.open(uploaded_file).convert("RGB")
-        img_np = np.array(pil_image)
+        if uploaded_file is not None:
+            pil_image = Image.open(uploaded_file)
 
-        col1, col2 = st.columns(2)
-        with col1:
-            st.image(pil_image, caption="Uploaded Image", use_container_width=True)
+            col1, col2 = st.columns(2)
+            with col1:
+                st.image(pil_image, caption="Uploaded Image", use_container_width=True)
 
-        with col2:
-            try:
-                detector = load_detector()
-                gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
-                faces = detector.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4)
+            with col2:
+                try:
+                    test_feat = extract_pil_features(pil_image).reshape(1, -1)
+                    prediction = model.predict(test_feat)[0]
+                    probs = model.predict_proba(test_feat)[0]
+                    confidence = np.max(probs) * 100
 
-                if len(faces) == 0:
-                    st.warning("No faces detected in the uploaded image.")
-                elif len(db_features) == 0:
-                    st.error("Face database is empty.")
-                else:
-                    input_feat = extract_face_features(img_np, faces[0])
-                    distances = [cv2.compareHist(input_feat, db_feat, cv2.HISTCMP_CHISQR) for db_feat in db_features]
-                    best_idx = np.argmin(distances)
-                    min_dist = distances[best_idx]
-
-                    predicted_name = db_labels[best_idx]
-                    confidence = max(0, min(100, (1 - (min_dist / 10.0)) * 100))
-
-                    st.success(f"**Identified Player:** {predicted_name}")
+                    st.success(f"**Identified Player:** {prediction}")
                     st.metric(label="Match Confidence", value=f"{confidence:.1f}%")
-            except Exception as e:
-                st.error(f"Error analyzing image: {e}")
+                except Exception as e:
+                    st.error(f"Error predicting image: {e}")
