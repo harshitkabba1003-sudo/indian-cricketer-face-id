@@ -1,6 +1,14 @@
 # indian-cricketer-face-id
+# 🏏 Indian Cricket Team Member Face Identification
+
+[![Streamlit App](https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=Streamlit&logoColor=white)](https://indian-cricketer-face-id-2edr8gd92mfh6j6eztbyaq.streamlit.app/)
+[![Python](https://img.shields.io/badge/Python-3.10-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
+
+An end-to-end Computer Vision and Machine Learning web application designed to automatically detect and identify Indian Cricket Team members from uploaded images using facial feature extraction.
 🏏 Indian Cricket Team Member Face Identification
 An end-to-end Computer Vision and Machine Learning web application designed to automatically detect and identify Indian Cricket Team members from uploaded images using facial feature extraction.
+Steamlit link : https://indian-cricketer-face-id-2edr8gd92mfh6j6eztbyaq.streamlit.app/
 
 📸 Dataset & Supported Players
 The system is trained and configured to recognize facial encodings for 14 Indian Cricket Players[cite: 1]:
